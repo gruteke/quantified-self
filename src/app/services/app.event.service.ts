@@ -6,6 +6,9 @@ import { AngularFirestore, AngularFirestoreCollection, } from '@angular/fire/fir
 import { bufferCount, catchError, concatMap, map, switchMap, take } from 'rxjs/operators';
 import { firestore } from 'firebase/app';
 import * as Pako from 'pako';
+import * as JSONC from 'jsoncomp';
+import * as LZ from 'lz-string';
+const lzma = require("lzma/src/lzma_worker.js").LZMA_WORKER;
 import { EventJSONInterface } from '@sports-alliance/sports-lib/lib/events/event.json.interface';
 import { ActivityJSONInterface } from '@sports-alliance/sports-lib/lib/activities/activity.json.interface';
 import { ActivityInterface } from '@sports-alliance/sports-lib/lib/activities/activity.interface';
@@ -24,6 +27,8 @@ import {
   ServiceNames
 } from '@sports-alliance/sports-lib/lib/meta-data/event-meta-data.interface';
 import { EventExporterGPX } from '@sports-alliance/sports-lib/lib/events/adapters/exporters/exporter.gpx';
+import { getSize } from '@sports-alliance/sports-lib/lib/events/utilities/helpers';
+
 
 
 @Injectable({
@@ -201,6 +206,40 @@ export class AppEventService implements OnDestroy {
           // this.logger.info(`Steam ${stream.type} has size of GZIP ${getSize(this.getBlobFromStreamData(stream.data))}`);
           // this.logger.info(`Steam ${stream.type} has size of GZIP ${getSize(firestore.Blob.fromUint8Array(Pako.gzip(JSON.stringify(stream.data))))}`);
           // console.log(`Stream ${stream.type} has size of GZIP ${getSize(Buffer.from((Pako.gzip(JSON.stringify(stream.data), {to: 'string'})), 'binary'))}`);
+          console.log(`Stream ${stream.type} has original size  ${getSize(stream.getData())}`);
+          console.log(`Stream ${stream.type} has size of LZ + GZIP ${getSize((LZ.compress(Pako.gzip(JSON.stringify(stream.getData()), {to: 'string'}))))}`);
+          console.log(`Stream ${stream.type} has size of LZ ${getSize((LZ.compress(JSON.stringify(stream.getData()), {to: 'string'})))}`);
+          console.log(`Stream ${stream.type} has size of LZMA ${getSize((lzma.compress(JSON.stringify(stream.getData()), {to: 'string'})))}`);
+          console.log(`Stream ${stream.type} has size of GZIP ${getSize((Pako.gzip(JSON.stringify(stream.getData()), {to: 'string'})))}`);
+          console.log(`Stream ${stream.type} has size of GZIP BTOA ${getSize(btoa(Pako.gzip(JSON.stringify(stream.getData()), {to: 'string'})))}`);
+          console.log(`Stream ${stream.type} has size of GZIP UINT ${getSize((Pako.gzip(JSON.stringify(stream.getData()))))}`);
+          console.log(`Stream ${stream.type} has size of Deflate ${getSize((Pako.deflate(JSON.stringify(stream.getData()), {to: 'string'})))}`);
+          console.log(`Stream ${stream.type} has size of Deflate Raw ${getSize((Pako.deflateRaw(JSON.stringify(stream.getData()), {to: 'string'})))}`);
+          console.log(`Stream ${stream.type} has size of GZIP + LEVEL 9 ${getSize((Pako.gzip(JSON.stringify(stream.getData()), {level: 9, to: 'string'})))}`);
+          console.log(`Stream ${stream.type} has size of GZIP + LEVEL 9 + Strategy ${getSize((Pako.gzip(JSON.stringify(stream.getData()), {level: 9, strategy: 1, to: 'string'})))}`);
+          console.log(`Stream ${stream.type} has size of GZIP + LEVEL 9 + Strategy ${getSize((Pako.gzip(JSON.stringify(stream.getData()), {level: 9, strategy: 2, to: 'string'})))}`);
+          console.log(`Stream ${stream.type} has size of GZIP + LEVEL 9 + Strategy ${getSize((Pako.gzip(JSON.stringify(stream.getData()), {level: 9, strategy: 3, to: 'string'})))}`);
+          console.log(`Stream ${stream.type} has size of GZIP + LEVEL 9 + Strategy ${getSize((Pako.gzip(JSON.stringify(stream.getData()), {level: 9, strategy: 4, to: 'string'})))}`);
+          console.log(`Stream ${stream.type} has size of GZIP + LEVEL 9 + Strategy ${getSize((Pako.gzip(JSON.stringify(stream.getData()), {level: 9, strategy: 0, to: 'string'})))}`);
+          console.log(`Stream ${stream.type} has size of GZIP + LEVEL 9 + Strategy + no stringify ${getSize((Pako.gzip(stream.getData(), {level: 9, strategy: 0, to: 'string'})))}`);
+          console.log(`Stream ${stream.type} has size of GZIP + LEVEL 9 + Strategy + no string + no string out ${getSize((Pako.gzip(stream.getData(), {level: 9, strategy: 0})))}`);
+          console.log(`Stream ${stream.type} has size of JSONC ${getSize(JSONC.compress( {...stream.getData()} ))}`);
+
+          const a = Pako.gzip(JSON.stringify(stream.getData()), {level: 9, strategy: 0, to: 'string'})
+          const b = Pako.gzip(JSON.stringify(stream.getData()), {level: 9, strategy: 0})
+
+
+          const c = Pako.ungzip(a)
+          const d = Pako.ungzip(b)
+
+          const e  = new TextDecoder("utf-8").decode(c);
+          const f  = new TextDecoder("utf-8").decode(d);
+
+          const P = Pako
+          const L = LZ
+          const size = getSize
+
+          debugger;
           writePromises.push(this.afs
             .collection('users')
             .doc(user.uid)
@@ -212,7 +251,7 @@ export class AppEventService implements OnDestroy {
             .doc(stream.type)
             .set({
               type: stream.type,
-              data: this.getBlobFromStreamData(stream.getData()),
+              data: (Pako.gzip(JSON.stringify(stream.getData()), {to: 'string'}))
             }))
         });
       });
@@ -476,12 +515,14 @@ export class AppEventService implements OnDestroy {
     return firestore.Blob.fromBase64String(btoa(Pako.gzip(JSON.stringify(streamData), {to: 'string'})))
   }
 
-  private getStreamDataFromBlob(blob: firestore.Blob): number[] {
+  private getStreamDataFromBlob(blob): number[] {
+    const a = gzip_decode;
+    debugger;
     // const t0 = performance.now();
     // JSON.parse(Pako.ungzip(atob(blob.toBase64()), {to: 'string'}));
     // const t1 = performance.now();
     // console.log(`Pako ${t1 - t0}`);
-    return JSON.parse(gzip_decode(blob.toBase64()));
+    return JSON.parse(gzip_decode(blob));
   }
 }
 
